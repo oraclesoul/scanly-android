@@ -9,3 +9,7 @@ captures/
 *.keystore
 keystore.properties
 Scanly.apk
+
+ios/*.xcodeproj/
+ios/build/
+*.xcresult
