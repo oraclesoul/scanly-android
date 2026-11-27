@@ -9,12 +9,15 @@ class ScanlyApp : Application() {
         private set
     lateinit var settings: AppSettings
         private set
+    lateinit var pdfStore: PdfStore
+        private set
 
     override fun onCreate() {
         super.onCreate()
         OpenCVLoader.initLocal()
         repo = DocRepository(this)
         settings = AppSettings(this)
+        pdfStore = PdfStore(this)
     }
 }
 
@@ -23,3 +26,6 @@ val Context.repo: DocRepository
 
 val Context.appSettings: AppSettings
     get() = (applicationContext as ScanlyApp).settings
+
+val Context.pdfStore: PdfStore
+    get() = (applicationContext as ScanlyApp).pdfStore

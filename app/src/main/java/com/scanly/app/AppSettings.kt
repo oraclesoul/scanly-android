@@ -30,13 +30,10 @@ class AppSettings(private val context: Context) {
 
     /** Returns false if the folder permission could not be kept. Pass null to go back to the default. */
     fun setSaveTree(uri: Uri?): Boolean {
-        val old = _saveTree.value
         if (uri != null) {
+            // earlier folders keep their permission so PDFs saved there stay viewable, renamable and deletable
             val ok = runCatching { context.contentResolver.takePersistableUriPermission(uri, FLAGS) }.isSuccess
             if (!ok) return false
-        }
-        if (old != null && old != uri) {
-            runCatching { context.contentResolver.releasePersistableUriPermission(old, FLAGS) }
         }
         prefs.edit().apply { if (uri == null) remove(KEY_TREE) else putString(KEY_TREE, uri.toString()) }.apply()
         _saveTree.value = uri

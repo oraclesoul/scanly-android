@@ -15,6 +15,7 @@ import com.scanly.app.ui.CropScreen
 import com.scanly.app.ui.DocumentScreen
 import com.scanly.app.ui.HomeScreen
 import com.scanly.app.ui.PageEditorScreen
+import com.scanly.app.ui.PdfViewerScreen
 import com.scanly.app.ui.ScannerScreen
 import com.scanly.app.ui.SettingsScreen
 import com.scanly.app.ui.ScanlyTheme
@@ -32,7 +33,17 @@ class MainActivity : ComponentActivity() {
                             HomeScreen(
                                 onScan = { nav.navigate("scan/new") },
                                 onOpen = { nav.navigate("doc/$it") },
+                                onOpenPdf = { nav.navigate("pdf/$it") },
                                 onSettings = { nav.navigate("settings") }
+                            )
+                        }
+                        composable(
+                            "pdf/{id}",
+                            arguments = listOf(navArgument("id") { type = NavType.StringType })
+                        ) { entry ->
+                            PdfViewerScreen(
+                                pdfId = entry.arguments?.getString("id").orEmpty(),
+                                onBack = { nav.popBackStack() }
                             )
                         }
                         composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }

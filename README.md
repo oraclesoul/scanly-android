@@ -6,7 +6,7 @@ Ad-free document scanner for Android 13+ (Kotlin, Jetpack Compose, Material 3, C
 
 ## Features
 
-- Scan with the in-app camera (multi-page) or import photos from the gallery
+- Home screen opens on a **PDFs** list: view in the built-in viewer, share, rename or delete any PDF you made; a **Scans** tab keeps your editable documents; Scan and Import buttons are always on screen
 - Automatic edge detection + manual crop with perspective correction
 - Per-page filters: Original, Cropped, Enhanced, Xerox (B&W)
 - Select any pages (tap the circle on a page) to apply a filter to just those pages or delete them in one go
@@ -33,3 +33,4 @@ create `keystore.properties` in the project root (it is git-ignored):
 
 - Display name: `app/src/main/res/values/strings.xml` (`app_name`)
 - Package id: `applicationId` in `app/build.gradle.kts` (and optionally `namespace`)
+- Icon: edit `app/src/main/res/drawable/ic_launcher_*.xml` (a standalone copy of the artwork is in `design/icon.svg`)

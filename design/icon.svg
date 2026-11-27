@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="108" y2="108" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4C8DF6"/>
+      <stop offset="1" stop-color="#1558C8"/>
+    </linearGradient>
+    <clipPath id="shape"><rect width="108" height="108" rx="24"/></clipPath>
+  </defs>
+  <g clip-path="url(#shape)">
+    <rect width="108" height="108" fill="url(#bg)"/>
+    <!-- viewfinder corners -->
+    <path d="M29,41 V33 A4,4 0 0 1 33,29 H41 M67,29 H75 A4,4 0 0 1 79,33 V41 M79,67 V75 A4,4 0 0 1 75,79 H67 M41,79 H33 A4,4 0 0 1 29,75 V67"
+          fill="none" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- page -->
+    <path d="M45,35 H59 L67,43 V69 A4,4 0 0 1 63,73 H45 A4,4 0 0 1 41,69 V39 A4,4 0 0 1 45,35 Z" fill="#FFFFFF"/>
+    <path d="M59,35 L59,43 L67,43 Z" fill="#BBD3F7"/>
+    <!-- text lines -->
+    <path d="M46,39 h10 v2.4 h-10 z M46,44 h16 v2.4 h-16 z M46,57 h16 v2.4 h-16 z M46,62 h16 v2.4 h-16 z M46,67 h10 v2.4 h-10 z" fill="#1A73E8"/>
+    <!-- scan beam -->
+    <path d="M35,51 H73" fill="none" stroke="#FBBC04" stroke-width="3.4" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import java.util.Locale
+import java.util.UUID
 
 enum class PdfPageSize(val label: String) {
     A4("A4"),
@@ -75,10 +76,21 @@ object PdfExporter {
         }
 
         // the system may have renamed the file to avoid a clash, so report the real name
-        val savedName = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
-            if (it.moveToFirst()) it.getString(0) else null
-        } ?: "$safeName.pdf"
-        SavedPdf(uri, savedName, settings.locationLabel(tree))
+        var savedName: String? = null
+        var sizeBytes = 0L
+        resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use {
+            if (it.moveToFirst()) {
+                savedName = it.getString(0)
+                sizeBytes = it.getLong(1)
+            }
+        }
+        val finalName = savedName ?: "$safeName.pdf"
+        val location = settings.locationLabel(tree)
+        context.pdfStore.add(
+            PdfRecord(UUID.randomUUID().toString(), uri.toString(), finalName, location, System.currentTimeMillis(), doc.pages.size, sizeBytes),
+            doc.pages.firstOrNull()?.let { context.repo.thumbFile(doc.id, it) }
+        )
+        SavedPdf(uri, finalName, location)
     }
 
     private fun write(
