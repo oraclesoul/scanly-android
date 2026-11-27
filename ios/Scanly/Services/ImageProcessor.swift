@@ -82,44 +82,136 @@ enum ImageProcessor {
 
     // MARK: - Edge detection
 
-    /// Finds the document outline using Vision. Returns nil when nothing convincing is found.
+    /// Finds the document outline. Tries Apple's Vision first and checks that the answer is plausible,
+    /// then falls back to a brightness-based detector. Returns nil when nothing convincing is found.
     static func detectCorners(_ image: UIImage) -> [Double]? {
+        if let cg = image.cgImage {
+            let handler = VNImageRequestHandler(cgImage: cg, options: [:])
+
+            let segmentation = VNDetectDocumentSegmentationRequest()
+            if (try? handler.perform([segmentation])) != nil,
+               let obs = segmentation.results?.first, obs.confidence > 0.5,
+               let corners = fromObservation(obs), isPlausible(corners) {
+                return corners
+            }
+
+            let rects = VNDetectRectanglesRequest()
+            rects.maximumObservations = 1
+            rects.minimumConfidence = 0.6
+            rects.minimumAspectRatio = 0.3
+            rects.minimumSize = 0.35
+            rects.quadratureTolerance = 30
+            if (try? handler.perform([rects])) != nil, let obs = rects.results?.first,
+               let corners = fromObservation(obs), isPlausible(corners) {
+                return corners
+            }
+        }
+        return detectByBrightness(image)
+    }
+
+    /// Area of the quadrilateral as a fraction of the image (shoelace formula).
+    static func quadArea(_ c: [Double]) -> Double {
+        var sum = 0.0
+        for i in 0..<4 {
+            let j = (i + 1) % 4
+            sum += c[i * 2] * c[j * 2 + 1] - c[j * 2] * c[i * 2 + 1]
+        }
+        return abs(sum) / 2
+    }
+
+    /// A page normally fills a good part of the frame without being the whole frame.
+    private static func isPlausible(_ c: [Double]) -> Bool {
+        let a = quadArea(c)
+        return a >= 0.35 && a <= 0.98
+    }
+
+    /// Looks for the largest bright blob (paper on a darker surface) and takes its extreme corners.
+    private static func detectByBrightness(_ image: UIImage) -> [Double]? {
         guard let cg = image.cgImage else { return nil }
-        let handler = VNImageRequestHandler(cgImage: cg, options: [:])
-
-        let segmentation = VNDetectDocumentSegmentationRequest()
-        if (try? handler.perform([segmentation])) != nil,
-           let obs = segmentation.results?.first, obs.confidence > 0.5,
-           let corners = fromObservation(obs) {
-            return corners
+        let scale = 320.0 / Double(max(cg.width, cg.height))
+        let w = max(8, Int(Double(cg.width) * scale)), h = max(8, Int(Double(cg.height) * scale))
+        var gray = [UInt8](repeating: 0, count: w * h)
+        gray.withUnsafeMutableBytes { ptr in
+            guard let ctx = CGContext(
+                data: ptr.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w,
+                space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
+            ) else { return }
+            ctx.interpolationQuality = .medium
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
         }
 
-        let rects = VNDetectRectanglesRequest()
-        rects.maximumObservations = 1
-        rects.minimumConfidence = 0.6
-        rects.minimumAspectRatio = 0.3
-        rects.minimumSize = 0.25
-        rects.quadratureTolerance = 30
-        if (try? handler.perform([rects])) != nil, let obs = rects.results?.first {
-            return fromObservation(obs)
+        // Otsu threshold
+        var hist = [Int](repeating: 0, count: 256)
+        for v in gray { hist[Int(v)] += 1 }
+        let total = w * h
+        var sumAll = 0.0
+        for i in 0..<256 { sumAll += Double(i * hist[i]) }
+        var wB = 0, sumB = 0.0, best = 0.0, threshold = 128
+        for t in 0..<256 {
+            wB += hist[t]
+            if wB == 0 { continue }
+            let wF = total - wB
+            if wF == 0 { break }
+            sumB += Double(t * hist[t])
+            let mB = sumB / Double(wB), mF = (sumAll - sumB) / Double(wF)
+            let between = Double(wB) * Double(wF) * (mB - mF) * (mB - mF)
+            if between > best { best = between; threshold = t }
         }
-        return nil
+
+        // largest 4-connected bright component
+        var labels = [Int32](repeating: 0, count: total)
+        var stack = [Int]()
+        var bestLabel: Int32 = 0
+        var bestSize = 0
+        var next: Int32 = 1
+        for start in 0..<total where gray[start] > UInt8(threshold) && labels[start] == 0 {
+            var size = 0
+            stack.append(start)
+            labels[start] = next
+            while let p = stack.popLast() {
+                size += 1
+                let x = p % w, y = p / w
+                if x > 0, labels[p - 1] == 0, gray[p - 1] > UInt8(threshold) { labels[p - 1] = next; stack.append(p - 1) }
+                if x < w - 1, labels[p + 1] == 0, gray[p + 1] > UInt8(threshold) { labels[p + 1] = next; stack.append(p + 1) }
+                if y > 0, labels[p - w] == 0, gray[p - w] > UInt8(threshold) { labels[p - w] = next; stack.append(p - w) }
+                if y < h - 1, labels[p + w] == 0, gray[p + w] > UInt8(threshold) { labels[p + w] = next; stack.append(p + w) }
+            }
+            if size > bestSize { bestSize = size; bestLabel = next }
+            next += 1
+        }
+        guard bestSize > 0, Double(bestSize) / Double(total) >= 0.2 else { return nil }
+
+        // the four extreme points of the blob give the corners of a skewed sheet
+        var tl = (x: 0, y: 0), tr = tl, br = tl, bl = tl
+        var minSum = Int.max, maxSum = Int.min, minDiff = Int.max, maxDiff = Int.min
+        for p in 0..<total where labels[p] == bestLabel {
+            let x = p % w, y = p / w
+            if x + y < minSum { minSum = x + y; tl = (x, y) }
+            if x + y > maxSum { maxSum = x + y; br = (x, y) }
+            if y - x < minDiff { minDiff = y - x; tr = (x, y) }
+            if y - x > maxDiff { maxDiff = y - x; bl = (x, y) }
+        }
+        let fw = Double(w), fh = Double(h)
+        let corners = [tl, tr, br, bl].flatMap { [Double($0.x) / fw, Double($0.y) / fh] }
+        return isPlausible(corners) ? insetCorners(corners, by: 0.01) : nil
+    }
+
+    private static func insetCorners(_ c: [Double], by inset: Double) -> [Double] {
+        let cx = (c[0] + c[2] + c[4] + c[6]) / 4
+        let cy = (c[1] + c[3] + c[5] + c[7]) / 4
+        var out = c
+        for i in 0..<4 {
+            out[i * 2] = min(1, max(0, c[i * 2] + (cx - c[i * 2]) * inset))
+            out[i * 2 + 1] = min(1, max(0, c[i * 2 + 1] + (cy - c[i * 2 + 1]) * inset))
+        }
+        return out
     }
 
     private static func fromObservation(_ o: VNRectangleObservation) -> [Double]? {
         // Vision uses a bottom-left origin, so flip y
         let pts = [o.topLeft, o.topRight, o.bottomRight, o.bottomLeft].map { (Double($0.x), 1 - Double($0.y)) }
-        let ordered = orderPoints(pts)
         // pull the corners slightly inward so the surface behind the paper doesn't leak into the crop
-        let cx = (ordered[0] + ordered[2] + ordered[4] + ordered[6]) / 4
-        let cy = (ordered[1] + ordered[3] + ordered[5] + ordered[7]) / 4
-        let inset = 0.01
-        var out = ordered
-        for i in 0..<4 {
-            out[i * 2] = min(1, max(0, ordered[i * 2] + (cx - ordered[i * 2]) * inset))
-            out[i * 2 + 1] = min(1, max(0, ordered[i * 2 + 1] + (cy - ordered[i * 2 + 1]) * inset))
-        }
-        return out
+        return insetCorners(orderPoints(pts), by: 0.01)
     }
 
     // MARK: - Rendering

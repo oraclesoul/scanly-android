@@ -62,8 +62,11 @@ struct DocumentView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { selected = [] }.accessibilityIdentifier("cancelSelection")
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
                     Button("Select all") { selected = Set(doc.pages.map(\.id)) }
+                    Button { confirmDeletePages = true } label: { Image(systemName: "trash") }
+                        .accessibilityLabel("Delete selected pages")
+                        .accessibilityIdentifier("deleteSelected")
                 }
             } else {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -188,25 +191,18 @@ struct DocumentView: View {
                 .padding(.leading, 16)
                 .padding(.top, 10)
             let common = Set(selectedPages.map(\.filter)).count == 1 ? selectedPages.first?.filter : nil
-            HStack {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(PageFilter.allCases) { f in
-                            FilterChip(title: f.label, selected: common == f) {
-                                let ids = Set(selectedPages.map(\.id))
-                                Task { busy = true; await repo.setFilter(docId: docId, pageIds: ids, filter: f); busy = false }
-                            }
-                            .accessibilityIdentifier("filter.\(f.rawValue)")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(PageFilter.allCases) { f in
+                        FilterChip(title: f.label, selected: common == f) {
+                            let ids = Set(selectedPages.map(\.id))
+                            Task { busy = true; await repo.setFilter(docId: docId, pageIds: ids, filter: f); busy = false }
                         }
+                        .accessibilityIdentifier("filter.\(f.rawValue)")
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 6)
                 }
-                Button { confirmDeletePages = true } label: {
-                    Image(systemName: "trash").font(.title3).frame(width: 44, height: 44)
-                }
-                .accessibilityLabel("Delete selected pages")
-                .accessibilityIdentifier("deleteSelected")
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
             }
         }
         .padding(.bottom, 4)
