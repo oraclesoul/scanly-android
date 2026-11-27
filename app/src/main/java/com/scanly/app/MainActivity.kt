@@ -16,6 +16,7 @@ import com.scanly.app.ui.DocumentScreen
 import com.scanly.app.ui.HomeScreen
 import com.scanly.app.ui.PageEditorScreen
 import com.scanly.app.ui.ScannerScreen
+import com.scanly.app.ui.SettingsScreen
 import com.scanly.app.ui.ScanlyTheme
 
 class MainActivity : ComponentActivity() {
@@ -30,9 +31,11 @@ class MainActivity : ComponentActivity() {
                         composable("home") {
                             HomeScreen(
                                 onScan = { nav.navigate("scan/new") },
-                                onOpen = { nav.navigate("doc/$it") }
+                                onOpen = { nav.navigate("doc/$it") },
+                                onSettings = { nav.navigate("settings") }
                             )
                         }
+                        composable("settings") { SettingsScreen(onBack = { nav.popBackStack() }) }
                         composable(
                             "scan/{docId}",
                             arguments = listOf(navArgument("docId") { type = NavType.StringType })

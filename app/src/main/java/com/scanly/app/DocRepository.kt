@@ -78,9 +78,25 @@ class DocRepository(context: Context) {
         if (applied) thumbFile(docId, cur).delete() else thumbFile(docId, updated).delete()
     }
 
-    suspend fun setFilterAll(docId: String, filter: PageFilter) {
-        val ids = doc(docId)?.pages?.filter { it.filter != filter }?.map { it.id } ?: return
+    suspend fun setFilter(docId: String, pageIds: Collection<String>, filter: PageFilter) {
+        val ids = doc(docId)?.pages?.filter { it.id in pageIds && it.filter != filter }?.map { it.id } ?: return
         ids.forEach { id -> editPage(docId, id) { it.copy(filter = filter) } }
+    }
+
+    /** Removes several pages at once; deleting every page removes the document itself. */
+    fun deletePages(docId: String, pageIds: Set<String>) {
+        val d = doc(docId) ?: return
+        val doomed = d.pages.filter { it.id in pageIds }
+        if (doomed.isEmpty()) return
+        if (doomed.size == d.pages.size) {
+            deleteDoc(docId)
+            return
+        }
+        mutate(docId) { it.copy(pages = it.pages.filter { p -> p.id !in pageIds }, updatedAt = System.currentTimeMillis()) }
+        doomed.forEach {
+            pageFile(docId, it.id).delete()
+            thumbFile(docId, it).delete()
+        }
     }
 
     suspend fun rotatePage(docId: String, pageId: String, clockwise: Boolean) = withContext(Dispatchers.IO) {

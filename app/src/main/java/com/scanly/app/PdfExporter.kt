@@ -4,7 +4,9 @@ import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
+import android.provider.DocumentsContract
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -22,6 +24,8 @@ enum class PdfQuality(val label: String, val maxSide: Int, val jpegQuality: Int)
     SMALL("Small", 1240, 70)
 }
 
+data class SavedPdf(val uri: Uri, val fileName: String, val location: String)
+
 object PdfExporter {
 
     fun sanitizeName(raw: String): String {
@@ -29,34 +33,52 @@ object PdfExporter {
         return cleaned.ifEmpty { "Scan" }
     }
 
-    /** Writes the document as a PDF into Downloads/Scanly and returns its content Uri. */
-    suspend fun exportToDownloads(
+    /** Writes the document as a PDF into the user's chosen folder, or Downloads/Scanly by default. */
+    suspend fun export(
         context: Context,
         doc: ScanDoc,
         name: String,
         size: PdfPageSize,
         quality: PdfQuality,
         onProgress: (Int, Int) -> Unit
-    ): Uri = withContext(Dispatchers.IO) {
+    ): SavedPdf = withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
-        val values = ContentValues().apply {
-            put(MediaStore.Downloads.DISPLAY_NAME, sanitizeName(name) + ".pdf")
-            put(MediaStore.Downloads.MIME_TYPE, "application/pdf")
-            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Scanly")
-            put(MediaStore.Downloads.IS_PENDING, 1)
+        val settings = context.appSettings
+        val tree = settings.saveTree.value
+        val safeName = sanitizeName(name)
+
+        val uri: Uri = if (tree != null) {
+            val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+            DocumentsContract.createDocument(resolver, parent, "application/pdf", "$safeName.pdf")
+                ?: error("Could not create file")
+        } else {
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, "$safeName.pdf")
+                put(MediaStore.Downloads.MIME_TYPE, "application/pdf")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Scanly")
+                put(MediaStore.Downloads.IS_PENDING, 1)
+            }
+            resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: error("Could not create file")
         }
-        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-            ?: error("Could not create file")
+
         try {
             val stream = resolver.openOutputStream(uri) ?: error("Could not open file")
-            stream.buffered().use { write(context, doc, sanitizeName(name), size, quality, it, onProgress) }
-            val done = ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }
-            resolver.update(uri, done, null, null)
+            stream.buffered().use { write(context, doc, safeName, size, quality, it, onProgress) }
+            if (tree == null) {
+                val done = ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }
+                resolver.update(uri, done, null, null)
+            }
         } catch (e: Throwable) {
-            resolver.delete(uri, null, null)
+            if (tree != null) runCatching { DocumentsContract.deleteDocument(resolver, uri) }
+            else resolver.delete(uri, null, null)
             throw e
         }
-        uri
+
+        // the system may have renamed the file to avoid a clash, so report the real name
+        val savedName = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+            if (it.moveToFirst()) it.getString(0) else null
+        } ?: "$safeName.pdf"
+        SavedPdf(uri, savedName, settings.locationLabel(tree))
     }
 
     private fun write(

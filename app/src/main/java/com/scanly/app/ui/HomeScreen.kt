@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -77,7 +78,7 @@ suspend fun importImages(context: Context, docId: String, uris: List<Uri>): Int 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(onScan: () -> Unit, onOpen: (String) -> Unit) {
+fun HomeScreen(onScan: () -> Unit, onOpen: (String) -> Unit, onSettings: () -> Unit) {
     val context = LocalContext.current
     val repo = context.repo
     val scope = rememberCoroutineScope()
@@ -103,6 +104,9 @@ fun HomeScreen(onScan: () -> Unit, onOpen: (String) -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text("Scanly", fontWeight = FontWeight.Medium) },
+                actions = {
+                    IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, contentDescription = "Settings") }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },

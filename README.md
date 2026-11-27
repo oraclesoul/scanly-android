@@ -8,9 +8,11 @@ Ad-free document scanner for Android 13+ (Kotlin, Jetpack Compose, Material 3, C
 
 - Scan with the in-app camera (multi-page) or import photos from the gallery
 - Automatic edge detection + manual crop with perspective correction
-- Per-page or all-pages filters: Original, Cropped, Enhanced, Xerox (B&W)
+- Per-page filters: Original, Cropped, Enhanced, Xerox (B&W)
+- Select any pages (tap the circle on a page) to apply a filter to just those pages or delete them in one go
 - Reorder pages by long-press + drag (or the move buttons in the page editor), rotate, delete
-- Export to PDF (A4 or fit-to-image, three quality levels) into Downloads/Scanly, then Open or Share
+- Export to PDF (A4 or fit-to-image, three quality levels) with a name you choose
+- Choose where PDFs are saved in Settings (any folder you pick, default Downloads/Scanly), then Open or Share
 - No ads, no accounts, no internet permission
 
 ## Build

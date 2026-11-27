@@ -27,14 +27,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.scanly.app.PdfExporter
 import com.scanly.app.PdfPageSize
 import com.scanly.app.PdfQuality
+import com.scanly.app.SavedPdf
 import com.scanly.app.ScanDoc
+import com.scanly.app.appSettings
 import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
@@ -90,18 +94,26 @@ fun ExportDialog(doc: ScanDoc, onDismiss: () -> Unit) {
     var quality by remember { mutableStateOf(PdfQuality.BALANCED) }
     var working by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
-    var result by remember { mutableStateOf<Uri?>(null) }
+    var result by remember { mutableStateOf<SavedPdf?>(null) }
+    val settings = context.appSettings
+    val tree by settings.saveTree.collectAsStateWithLifecycle()
+    val pickFolder = rememberFolderPicker()
 
     AlertDialog(
         onDismissRequest = { if (!working) onDismiss() },
         title = { Text(if (result != null) "PDF saved" else "Create PDF") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                val saved = result
                 when {
-                    result != null -> Text(
-                        "Saved to Downloads/Scanly/${PdfExporter.sanitizeName(name)}.pdf",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    saved != null -> {
+                        Text(saved.fileName, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "Saved in ${saved.location}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     working -> {
                         Text("Creating PDF…")
                         LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
@@ -110,10 +122,22 @@ fun ExportDialog(doc: ScanDoc, onDismiss: () -> Unit) {
                         OutlinedTextField(
                             value = name,
                             onValueChange = { name = it },
-                            label = { Text("File name") },
+                            label = { Text("PDF name") },
+                            suffix = { Text(".pdf") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Save to", style = MaterialTheme.typography.labelLarge)
+                                Text(
+                                    settings.locationLabel(tree),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            TextButton(onClick = pickFolder) { Text("Change") }
+                        }
                         Text("Page size", style = MaterialTheme.typography.labelLarge)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PdfPageSize.entries.forEach {
@@ -137,22 +161,23 @@ fun ExportDialog(doc: ScanDoc, onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            val uri = result
-            if (uri != null) {
+            val saved = result
+            if (saved != null) {
                 Row {
-                    TextButton(onClick = { openPdf(context, uri) }) { Text("Open") }
-                    TextButton(onClick = { sharePdf(context, uri) }) { Text("Share") }
+                    TextButton(onClick = { openPdf(context, saved.uri) }) { Text("Open") }
+                    TextButton(onClick = { sharePdf(context, saved.uri) }) { Text("Share") }
                 }
             } else if (!working) {
                 TextButton(onClick = {
                     working = true
                     scope.launch {
                         try {
-                            result = PdfExporter.exportToDownloads(context, doc, name, size, quality) { done, total ->
+                            result = PdfExporter.export(context, doc, name, size, quality) { done, total ->
                                 progress = if (total == 0) 0f else done.toFloat() / total
                             }
                         } catch (e: Exception) {
-                            Toast.makeText(context, "Could not create PDF", Toast.LENGTH_LONG).show()
+                            val hint = if (tree != null) " Check the save location." else ""
+                            Toast.makeText(context, "Could not create PDF.$hint", Toast.LENGTH_LONG).show()
                         }
                         working = false
                     }
