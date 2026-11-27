@@ -14,8 +14,8 @@ android {
         applicationId = "com.scanly.app"
         minSdk = 33
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
 
         // arm64 for real phones, x86_64 for the emulator
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
