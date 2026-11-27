@@ -12,7 +12,24 @@ enum DemoSeed {
             ("PAGE FOUR", ["Agreement", "Signed and dated", "Keep a copy for your records."])
         ]
         for (i, p) in pages.enumerated() {
-            _ = await repo.addPage(docId: doc.id, image: makePhoto(title: p.0, lines: p.1, tilt: CGFloat(i) * 0.02 - 0.03))
+            let photo = makePhoto(title: p.0, lines: p.1, tilt: CGFloat(i) * 0.02 - 0.03)
+            _ = await repo.addPage(docId: doc.id, image: photo)
+            dump(i, photo, repo.doc(doc.id)?.pages.last, repo)
+        }
+    }
+
+    /// Debug aid for CI: when DEBUG_DIR is set, writes the raw photo, the detected corners and the rendered page.
+    @MainActor
+    private static func dump(_ i: Int, _ photo: UIImage, _ page: ScanPage?, _ repo: DocRepository) {
+        guard let dir = ProcessInfo.processInfo.environment["DEBUG_DIR"], let page else { return }
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let base = URL(fileURLWithPath: dir)
+        ImageProcessor.saveJPEG(photo, to: base.appendingPathComponent("raw-\(i).jpg"), quality: 0.8)
+        let line = "page \(i): corners=\(page.corners.map { String(format: "%.3f", $0) }) size=\(photo.size)\n"
+        if let h = try? FileHandle(forWritingTo: base.appendingPathComponent("corners.txt")) {
+            h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close()
+        } else {
+            try? line.write(to: base.appendingPathComponent("corners.txt"), atomically: true, encoding: .utf8)
         }
     }
 

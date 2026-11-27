@@ -7,6 +7,9 @@ final class ScanlyUITests: XCTestCase {
         continueAfterFailure = false
         app = XCUIApplication()
         app.launchArguments = ["-resetData", "-seedDemo", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        if let dir = ProcessInfo.processInfo.environment["SCREENSHOT_DIR"] {
+            app.launchEnvironment["DEBUG_DIR"] = dir + "/debug"
+        }
         app.launch()
     }
 
