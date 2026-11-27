@@ -1,0 +1,46 @@
+name: Scanly
+options:
+  bundleIdPrefix: com.scanly
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.1"
+    CURRENT_PROJECT_VERSION: "2"
+    TARGETED_DEVICE_FAMILY: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+targets:
+  Scanly:
+    type: application
+    platform: iOS
+    sources:
+      - path: Scanly
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.scanly.app
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Scanly/Info.plist
+  ScanlyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: ScanlyUITests
+    dependencies:
+      - target: Scanly
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.scanly.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Scanly:
+    build:
+      targets:
+        Scanly: all
+        ScanlyUITests: [test]
+    test:
+      targets:
+        - ScanlyUITests

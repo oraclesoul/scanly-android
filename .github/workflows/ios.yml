@@ -1,0 +1,105 @@
+name: iOS
+
+on:
+  push:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcrun simctl list runtimes
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Pick an iPhone simulator
+        id: sim
+        run: |
+          UDID=$(python3 - <<'PY'
+          import json, subprocess
+          data = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"]))
+          best = None
+          for runtime, devices in data["devices"].items():
+              if "iOS" not in runtime:
+                  continue
+              version = [int(x) for x in runtime.split("iOS-")[-1].split("-") if x.isdigit()]
+              for d in devices:
+                  if d["name"].startswith("iPhone") and "Pro" not in d["name"] and "Plus" not in d["name"] and "Max" not in d["name"] and "SE" not in d["name"] and "Air" not in d["name"]:
+                      key = (version, d["name"])
+                      if best is None or key > best[0]:
+                          best = (key, d["udid"], d["name"])
+          print(best[1])
+          PY
+          )
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl list devices | grep "$UDID" || true
+
+      - name: Run UI tests
+        env:
+          TEST_RUNNER_SCREENSHOT_DIR: ${{ github.workspace }}/screenshots
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/screenshots"
+          set -o pipefail
+          xcodebuild test \
+            -project Scanly.xcodeproj \
+            -scheme Scanly \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -resultBundlePath "$GITHUB_WORKSPACE/TestResults.xcresult" \
+            CODE_SIGNING_ALLOWED=NO | tee "$GITHUB_WORKSPACE/xcodebuild-test.log" | tail -n 120
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-screenshots
+          path: screenshots
+          if-no-files-found: warn
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results
+          path: |
+            TestResults.xcresult
+            xcodebuild-test.log
+
+      - name: Build unsigned IPA
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Scanly.xcodeproj \
+            -scheme Scanly \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath "$GITHUB_WORKSPACE/build" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" | tail -n 40
+          APP=$(find "$GITHUB_WORKSPACE/build/Build/Products" -name "Scanly.app" -maxdepth 3 | head -n 1)
+          echo "App bundle: $APP"
+          mkdir -p "$GITHUB_WORKSPACE/ipa/Payload"
+          cp -R "$APP" "$GITHUB_WORKSPACE/ipa/Payload/"
+          cd "$GITHUB_WORKSPACE/ipa"
+          zip -qry Scanly-unsigned.ipa Payload
+          ls -la
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Scanly-unsigned-ipa
+          path: ipa/Scanly-unsigned.ipa
